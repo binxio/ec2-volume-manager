@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Volume Manager demo
+Parameters:
+  VPC:
+    Type: AWS::EC2::VPC::Id
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  Ami:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+Resources:
+  Disk1:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+        - Key: device-name
+          Value: xvdf
+        - Key: Name
+          Value: disk1
+  Disk2:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+        - Key: device-name
+          Value: xvdg
+        - Key: Name
+          Value: disk2
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Ref AWS::StackName
+      VPCZoneIdentifier:
+        - !Select [0, !Ref 'Subnets']
+      LaunchTemplate:
+        LaunchTemplateId: !Ref 'LaunchTemplate'
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
+      MinSize: '0'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+      Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+          PropagateAtLaunch: true
+        - Key: Name
+          Value: stateful-instance-1
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+        MaxBatchSize: 1
+        WaitOnResourceSignals: true
+
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: compute-node
+      LaunchTemplateData:
+        ImageId: !Ref Ami
+        InstanceType: t3.nano
+
+
