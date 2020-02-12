@@ -69,7 +69,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: ec2-volume-manager sync
-      ScheduleExpression: rate(2 minutes)
+      ScheduleExpression: rate(5 minutes)
       State: ENABLED
       Targets:
         - Id: ec2-volume-manager
