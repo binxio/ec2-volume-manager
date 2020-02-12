@@ -56,16 +56,23 @@ Create the volumes to attach and tag them with an `ec2-volume-manager-attachment
 ```
 
 ## Create an auto scaling group
-Create an auto scaling group and apply the tag `ec2-volume-manager-attachment` to all the instances:
+Create an auto scaling group and apply the tag `ec2-volume-manager-attachment` to the instances:
 ```
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      ...
+      MinSize: '0'
+      MaxSize: '1'
+      DesiredCapacity: '1'
       Tags:
         - Key: ec2-volume-manager-attachment
           Value: stateful-instance-1
           PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+        MaxBatchSize: 1
+        WaitOnResourceSignals: true
 ```
 That is all. If you want to see it all in action, deploy the demo.
 
