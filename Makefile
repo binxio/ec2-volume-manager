@@ -68,16 +68,14 @@ Pipfile.lock: Pipfile requirements.txt test-requirements.txt
 	pipenv install -r requirements.txt
 	pipenv install -d -r test-requirements.txt
 
-test: Pipfile.lock demo
-	for i in $(PWD)/cloudformation/*; do \
-		aws cloudformation validate-template --template-body file://$$i > /dev/null || exit 1; \
-	done
+test: Pipfile.lock demo delete-lambda
 	PYTHONPATH=$(PWD)/src pipenv run pytest tests/test*.py
 
 fmt:
 	black $(find src -name *.py) tests/*.py
 
 deploy-lambda:
+	aws cloudformation validate-template --template-body file://./cloudformation/ec2-volume-manager.yaml > /dev/null
 	aws cloudformation deploy \
 		--capabilities CAPABILITY_IAM \
 		--stack-name $(NAME) \
@@ -85,10 +83,12 @@ deploy-lambda:
 		--parameter-overrides CFNCustomProviderZipFileName=lambdas/$(NAME)-$(VERSION).zip
 
 delete-lambda:
-	aws cloudformation delete-stack --stack-name $(NAME)
-	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)
+	! aws cloudformation get-template --stack-name $(NAME) >/dev/null 2>&1 || \
+		aws cloudformation delete-stack --stack-name $(NAME) && \
+		 aws cloudformation wait stack-delete-complete  --stack-name $(NAME)
 
 demo: 
+	aws cloudformation validate-template --template-body file://./cloudformation/demo-stack.yaml > /dev/null
 	export VPC_ID=$$(aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs) ; \
         export SUBNET_IDS=$$(aws ec2 describe-subnets --output text --filters Name=vpc-id,Values=$$VPC_ID Name=default-for-az,Values=true --query 'sort_by(Subnets[?MapPublicIpOnLaunch], &AvailabilityZone)[*].SubnetId' | tr '\t', ','); \
 	echo "deploy demo in default VPC $$VPC_ID, subnets $$SUBNET_IDS" ; \

@@ -15,6 +15,7 @@ class Volume(dict):
         self.update(instance)
         self.attachments = [Attachment(a) for a in self.get("Attachments",[])]
         if len(self.attachments) > 1:
+            ## the API does support this, but the documentation says that EBS cannot be mounted on multiple instances
             raise Exception(f"Manager does not support volumes with multiple attachments ({self.volume_id}).")
 
     @property

@@ -76,6 +76,9 @@ Create an auto scaling group and apply the tag `ec2-volume-manager-attachment` t
 ```
 That is all. If you want to see it all in action, deploy the demo.
 
+Note that the instance should wait in the boot script, until all volumes have been attached before proceeding
+with the boot sequence.
+
 ## Deploy the demo
 In order to deploy the demo, type:
 

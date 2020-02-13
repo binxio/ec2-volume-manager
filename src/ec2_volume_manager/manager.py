@@ -109,6 +109,13 @@ class Manager(object):
         """
         self.refresh()
 
+        if not self.volumes:
+            logging.info(
+                f"there are no volumes with tag ec2-volume-manager-attachment={self.attachment_name} to attach"
+            )
+            return
+
+        log.info(f"attaching all volumes tagged with ec2-volume-manager-attachment={self.attachment_name}")
         if not self.running_instances:
             logging.info(
                 f"no running instance with tag ec2-volume-manager-attachment={self.attachment_name} to attach to"
@@ -122,14 +129,8 @@ class Manager(object):
             return
 
         if self.in_limbo_instances:
-            logging.info(
-                f"aborting attach volumes: there are{len(self.in_limbo_instances)} instances with tag ec2-volume-manager-attachment={self.attachment_name}"
-            )
-            return
-
-        if not self.volumes:
-            logging.info(
-                f"no volumes with tag ec2-volume-manager-attachment={self.attachment_name} to attach"
+            logging.warning(
+                f"cannot determine which instance to attach to: there are {len(self.in_limbo_instances)} instances with tag ec2-volume-manager-attachment={self.attachment_name} in flux"
             )
             return
 
@@ -158,6 +159,7 @@ class Manager(object):
         detach all volumes from `instance_id`.
         """
         self.refresh()
+        log.info(f"detaching all attached volumes from instance {instance_id} tagged with ec2-volume-manager-attachment={self.attachment_name}")
         volumes_to_detach = list(filter(lambda v: v.attachment_state == "attached" and instance_id == v.attached_to, self.volumes))
         for volume in volumes_to_detach:
             logging.info(f"detach volume '{volume.volume_id}' from '{instance_id}'")
@@ -207,7 +209,7 @@ def handler(event: dict, context: dict):
             return
 
         if not instance.attachment_name:
-            log.debug(
+            log.info(
                 f'ignoring instance "{instance.instance_id}" as it is not associated with a volume attachment'
             )
             return
@@ -219,6 +221,7 @@ def handler(event: dict, context: dict):
             manager.attach_volumes()
 
     elif is_timer(event):
+        log.info("consolidating")
         for attachment_name in get_all_attachment_names():
             manager = Manager(attachment_name)
             manager.attach_volumes()
