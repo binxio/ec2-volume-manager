@@ -63,7 +63,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: compute-node
+      LaunchTemplateName: !Ref AWS::StackName
       LaunchTemplateData:
         ImageId: !Ref Ami
         InstanceType: t3.nano

@@ -1,2 +1,2 @@
-For these tests to work, you first need to deploy the CloudFormation [../cloudformation/demo-stack.yaml]
+For these tests to work, you first need to deploy the CloudFormation [demo-stack](../cloudformation/demo-stack.yaml)
 and undeploy the [ec2-volume-manager](../cloudformation/ec2-volume-manager.yaml) if it is deployed.
