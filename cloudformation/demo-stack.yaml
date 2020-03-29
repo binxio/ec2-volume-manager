@@ -9,31 +9,6 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 Resources:
-  Disk1:
-    Type: AWS::EC2::Volume
-    Properties:
-      AvailabilityZone: !Sub '${AWS::Region}a'
-      Size: 8
-      Tags:
-        - Key: ec2-volume-manager-attachment
-          Value: stateful-instance-1
-        - Key: device-name
-          Value: xvdf
-        - Key: Name
-          Value: disk1
-  Disk2:
-    Type: AWS::EC2::Volume
-    Properties:
-      AvailabilityZone: !Sub '${AWS::Region}a'
-      Size: 8
-      Tags:
-        - Key: ec2-volume-manager-attachment
-          Value: stateful-instance-1
-        - Key: device-name
-          Value: xvdg
-        - Key: Name
-          Value: disk2
-
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -67,5 +42,72 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref Ami
         InstanceType: t3.nano
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        UserData: !Base64
+          Fn::Sub: |
+            #cloud-config
+            bootcmd:
+              - set -e -o pipefail
+              - mkdir -p /disk1 /disk2
+              - while [ ! -b $(readlink -f /dev/xvdf) ]; do echo "waiting for device /dev/xvdf"; sleep 5 ; done
+              - while [ ! -b $(readlink -f /dev/xvdg) ]; do echo "waiting for device /dev/xvdg"; sleep 5 ; done
+              - blkid $(readlink -f /dev/xvdf) || mkfs -t ext4 $(readlink -f /dev/xvdf)
+              - blkid $(readlink -f /dev/xvdg) || mkfs -t ext4 $(readlink -f /dev/xvdg)
+              - e2label $(readlink -f /dev/xvdf) disk1
+              - e2label $(readlink -f /dev/xvdg) disk2
+              - grep -q ^LABEL=disk1 /etc/fstab || echo 'LABEL=disk1 /disk1 ext4 defaults' >> /etc/fstab
+              - grep -q ^LABEL=disk2 /etc/fstab || echo 'LABEL=disk2 /disk2 ext4 defaults' >> /etc/fstab
+              - grep -q "^$(readlink -f /dev/xvdf) /disk1 " /proc/mounts || mount /disk1
+              - grep -q "^$(readlink -f /dev/xvdg) /disk2 " /proc/mounts || mount /disk2
+              - /opt/aws/bin/cfn-signal --stack ${AWS::StackName} --resource AutoScalingGroup
 
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'EC2Role'
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+
+  Disk1:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+        - Key: device-name
+          Value: xvdf
+        - Key: Name
+          Value: disk1
+
+  Disk2:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+        - Key: device-name
+          Value: xvdg
+        - Key: Name
+          Value: disk2
 

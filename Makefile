@@ -19,7 +19,7 @@ help:
 	@echo 'make demo            - deploys the provider and the demo cloudformation stack.'
 	@echo 'make delete-demo     - deletes the demo cloudformation stack.'
 
-deploy: target/$(NAME)-$(VERSION).zip
+deploy: target/$(NAME)-$(VERSION).zip	## lambda zip file to bucket
 	aws s3 --region $(AWS_REGION) \
 		cp --acl \
 		public-read target/$(NAME)-$(VERSION).zip \
@@ -29,7 +29,7 @@ deploy: target/$(NAME)-$(VERSION).zip
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-$(VERSION).zip \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-latest.zip 
 
-deploy-all-regions: deploy
+deploy-all-regions: deploy		## lambda zip files to all buckets 
 	@for REGION in $(ALL_REGIONS); do \
 		echo "copying to region $$REGION.." ; \
 		aws s3 --region $$REGION \
@@ -54,14 +54,8 @@ target/$(NAME)-$(VERSION).zip: src/*/*.py requirements.txt Dockerfile.lambda
 		docker rm -f $$ID && \
 		chmod ugo+r target/$(NAME)-$(VERSION).zip
 
-venv: requirements.txt
-	virtualenv -p python3 venv  && \
-	. ./venv/bin/activate && \
-	pip install --quiet --upgrade pip && \
-	pip install --quiet -r requirements.txt
-
 clean:
-	rm -rf venv target
+	rm -rf target
 	find . -name \*.pyc | xargs rm 
 
 Pipfile.lock: Pipfile requirements.txt test-requirements.txt
@@ -87,21 +81,41 @@ delete-lambda:
 		aws cloudformation delete-stack --stack-name $(NAME) && \
 		 aws cloudformation wait stack-delete-complete  --stack-name $(NAME)
 
+demo: VPC_ID=$(shell aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs)
+demo: SUBNET_IDS=$(shell aws ec2 describe-subnets --output text \
+		--filters Name=vpc-id,Values=$(VPC_ID) Name=default-for-az,Values=true \
+		--query 'join(`,`,sort_by(Subnets[?MapPublicIpOnLaunch], &AvailabilityZone)[*].SubnetId)')
 demo: 
 	aws cloudformation validate-template --template-body file://./cloudformation/demo-stack.yaml > /dev/null
-	export VPC_ID=$$(aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs) ; \
-        export SUBNET_IDS=$$(aws ec2 describe-subnets --output text --filters Name=vpc-id,Values=$$VPC_ID Name=default-for-az,Values=true --query 'sort_by(Subnets[?MapPublicIpOnLaunch], &AvailabilityZone)[*].SubnetId' | tr '\t', ','); \
-	echo "deploy demo in default VPC $$VPC_ID, subnets $$SUBNET_IDS" ; \
-        ([[ -z $$VPC_ID ]] || [[ -z $$SUBNET_IDS ]] ) && \
+	echo "deploy demo in default VPC $(VPC_ID), subnets $(SUBNET_IDS)" ; \
+        ([[ -z $(VPC_ID) ]] || [[ -z $(SUBNET_IDS) ]] ) && \
                 echo "Either there is no default VPC in your account or there are no subnets in the default VPC" && exit 1 ; \
 	aws cloudformation deploy --stack-name $(NAME)-demo \
 		--no-fail-on-empty-changeset \
+		--capabilities CAPABILITY_IAM \
 		--template ./cloudformation/demo-stack.yaml  \
-		$$CFN_TIMEOUT \
-		--parameter-overrides VPC=$$VPC_ID Subnets=$$SUBNET_IDS ;\
-
+		--parameter-overrides VPC=$(VPC_ID) Subnets=$(SUBNET_IDS)
 
 delete-demo:
 	aws cloudformation delete-stack --stack-name $(NAME)-demo
 	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)-demo
+
+stateful-demo: VPC_ID=$(shell aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs)
+stateful-demo: SUBNET_IDS=$(shell aws ec2 describe-subnets --output text \
+		--filters Name=vpc-id,Values=$(VPC_ID) Name=default-for-az,Values=true \
+		--query 'join(`,`,sort_by(Subnets[?MapPublicIpOnLaunch], &AvailabilityZone)[*].SubnetId)')
+stateful-demo: 
+	aws cloudformation validate-template --template-body file://./cloudformation/demo-stateful-stack.yaml > /dev/null
+	echo "deploy demo in default VPC $(VPC_ID), subnets $(SUBNET_IDS)" ; \
+        ([[ -z $(VPC_ID) ]] || [[ -z $(SUBNET_IDS) ]] ) && \
+                echo "Either there is no default VPC in your account or there are no subnets in the default VPC" && exit 1 ; \
+	aws cloudformation deploy --stack-name $(NAME)-stateful-demo \
+		--no-fail-on-empty-changeset \
+		--capabilities CAPABILITY_IAM \
+		--template ./cloudformation/demo-stateful-stack.yaml  \
+		--parameter-overrides VPC=$(VPC_ID) Subnets=$(SUBNET_IDS) Ami=/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs
+
+delete-stateful-demo:
+	aws cloudformation delete-stack --stack-name $(NAME)-stateful-demo
+	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)-stateful-demo
 

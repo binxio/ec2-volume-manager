@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Volume Manager demo
+Parameters:
+  VPC:
+    Type: AWS::EC2::VPC::Id
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  Ami:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+Resources:
+  StatefulServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Select [0, !Ref 'Subnets']
+      ImageId: !Ref Ami
+      InstanceType: t3.nano
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData: 
+        Fn::Base64: |
+          #cloud-config
+          bootcmd:
+            - set -e -o pipefail
+            - mkdir -p /disk1 /disk2
+            - while [ ! -b $(readlink -f /dev/xvdf) ]; do echo "waiting for device /dev/xvdf"; sleep 5 ; done
+            - while [ ! -b $(readlink -f /dev/xvdg) ]; do echo "waiting for device /dev/xvdg"; sleep 5 ; done
+            - blkid $(readlink -f /dev/xvdf) || mkfs -t ext4 $(readlink -f /dev/xvdf)
+            - blkid $(readlink -f /dev/xvdg) || mkfs -t ext4 $(readlink -f /dev/xvdg)
+            - e2label $(readlink -f /dev/xvdf) disk1
+            - e2label $(readlink -f /dev/xvdg) disk2
+            - grep -q ^LABEL=disk1 /etc/fstab || echo 'LABEL=disk1 /disk1 ext4 defaults' >> /etc/fstab
+            - grep -q ^LABEL=disk2 /etc/fstab || echo 'LABEL=disk2 /disk2 ext4 defaults' >> /etc/fstab
+            - grep -q "^$(readlink -f /dev/xvdf) /disk1 " /proc/mounts || mount /disk1
+            - grep -q "^$(readlink -f /dev/xvdg) /disk2 " /proc/mounts || mount /disk2
+      Tags:
+        - Key: Name
+          Value: stateful-instance-1
+
+  Disk1Attachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      Device: xvdf
+      InstanceId: !Ref StatefulServer
+      VolumeId: !Ref Disk1
+
+  Disk2Attachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      Device: xvdg
+      InstanceId: !Ref StatefulServer
+      VolumeId: !Ref Disk2
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'EC2Role'
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  Disk1:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: device-name
+          Value: xvdf
+        - Key: Name
+          Value: disk1
+
+  Disk2:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: device-name
+          Value: xvdg
+        - Key: Name
+          Value: disk2
+
