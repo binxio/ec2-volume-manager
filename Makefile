@@ -86,14 +86,14 @@ demo: SUBNET_IDS=$(shell aws ec2 describe-subnets --output text \
 		--filters Name=vpc-id,Values=$(VPC_ID) Name=default-for-az,Values=true \
 		--query 'join(`,`,sort_by(Subnets[?MapPublicIpOnLaunch], &AvailabilityZone)[*].SubnetId)')
 demo: 
-	aws cloudformation validate-template --template-body file://./cloudformation/demo-stack.yaml > /dev/null
+	aws cloudformation validate-template --template-body file://./cloudformation/demo.yaml > /dev/null
 	echo "deploy demo in default VPC $(VPC_ID), subnets $(SUBNET_IDS)" ; \
         ([[ -z $(VPC_ID) ]] || [[ -z $(SUBNET_IDS) ]] ) && \
                 echo "Either there is no default VPC in your account or there are no subnets in the default VPC" && exit 1 ; \
 	aws cloudformation deploy --stack-name $(NAME)-demo \
 		--no-fail-on-empty-changeset \
 		--capabilities CAPABILITY_IAM \
-		--template ./cloudformation/demo-stack.yaml  \
+		--template ./cloudformation/demo.yaml  \
 		--parameter-overrides VPC=$(VPC_ID) Subnets=$(SUBNET_IDS)
 
 delete-demo:
