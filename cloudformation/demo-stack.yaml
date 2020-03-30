@@ -9,32 +9,6 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 Resources:
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: !Ref AWS::StackName
-      VPCZoneIdentifier:
-        - !Select [0, !Ref 'Subnets']
-      LaunchTemplate:
-        LaunchTemplateId: !Ref 'LaunchTemplate'
-        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
-      MinSize: '0'
-      MaxSize: '1'
-      DesiredCapacity: '1'
-      Tags:
-        - Key: ec2-volume-manager-attachment
-          Value: stateful-instance-1
-          PropagateAtLaunch: true
-        - Key: Name
-          Value: stateful-instance-1
-          PropagateAtLaunch: true
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: 0
-        MaxBatchSize: 1
-        WaitOnResourceSignals: true
-
-
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -61,6 +35,11 @@ Resources:
               - grep -q "^$(readlink -f /dev/xvdf) /disk1 " /proc/mounts || mount /disk1
               - grep -q "^$(readlink -f /dev/xvdg) /disk2 " /proc/mounts || mount /disk2
               - /opt/aws/bin/cfn-signal --stack ${AWS::StackName} --resource AutoScalingGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: stateful-instance-1
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -84,19 +63,18 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 
-
   Disk1:
     Type: AWS::EC2::Volume
     Properties:
       AvailabilityZone: !Sub '${AWS::Region}a'
       Size: 8
       Tags:
-        - Key: ec2-volume-manager-attachment
-          Value: stateful-instance-1
         - Key: device-name
           Value: xvdf
         - Key: Name
           Value: disk1
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
 
   Disk2:
     Type: AWS::EC2::Volume
@@ -104,10 +82,32 @@ Resources:
       AvailabilityZone: !Sub '${AWS::Region}a'
       Size: 8
       Tags:
-        - Key: ec2-volume-manager-attachment
-          Value: stateful-instance-1
         - Key: device-name
           Value: xvdg
         - Key: Name
           Value: disk2
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Ref AWS::StackName
+      VPCZoneIdentifier:
+        - !Select [0, !Ref 'Subnets']
+      LaunchTemplate:
+        LaunchTemplateId: !Ref 'LaunchTemplate'
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
+      MinSize: '0'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+      Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+        MaxBatchSize: 1
+        WaitOnResourceSignals: true
 
