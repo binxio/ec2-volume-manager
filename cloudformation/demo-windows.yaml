@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Volume Manager demo
+Parameters:
+  VPC:
+    Type: AWS::EC2::VPC::Id
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  Ami:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-windows-latest/Windows_Server-2016-English-Full-Base'
+Resources:
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Ref AWS::StackName
+      LaunchTemplateData:
+        ImageId: !Ref Ami
+        InstanceType: t3.nano
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        UserData: !Base64
+          Fn::Sub: |
+            <powershell>
+            </powershell>
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: stateful-instance-1
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'EC2Role'
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  Disk1:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: device-name
+          Value: xvdf
+        - Key: Name
+          Value: disk1
+        - Key: DriveLetter
+          Value: D
+        - Key: SystemLabel
+          Value: DATA
+
+  Disk2:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Tags:
+        - Key: device-name
+          Value: xvdg
+        - Key: Name
+          Value: disk2
+        - Key: DriveLetter
+          Value: L
+        - Key: SystemLabel
+          Value: Log
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Ref AWS::StackName
+      VPCZoneIdentifier:
+        - !Select [0, !Ref 'Subnets']
+      LaunchTemplate:
+        LaunchTemplateId: !Ref 'LaunchTemplate'
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
+      MinSize: '0'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+        MaxBatchSize: 1
+        WaitOnResourceSignals: true
