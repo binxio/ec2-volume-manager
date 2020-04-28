@@ -7,6 +7,11 @@ S3_BUCKET=$(S3_BUCKET_PREFIX)-$(AWS_REGION)
 
 ALL_REGIONS=$(shell printf "import boto3\nprint('\\\n'.join(map(lambda r: r['RegionName'], boto3.client('ec2').describe_regions()['Regions'])))\n" | python | grep -v '^$(AWS_REGION)$$')
 
+VPC_ID=$(shell aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs)
+SUBNET_IDS=$(shell aws ec2 describe-subnets --output text \
+		--filters Name=vpc-id,Values=$(VPC_ID) Name=default-for-az,Values=true \
+		--query 'join(`,`,sort_by(Subnets[?MapPublicIpOnLaunch], &AvailabilityZone)[*].SubnetId)')
+
 help:
 	@echo 'make                 - builds a zip file to target/.'
 	@echo 'make release         - builds a zip file and deploys it to s3.'
@@ -81,10 +86,6 @@ delete-lambda:
 		aws cloudformation delete-stack --stack-name $(NAME) && \
 		 aws cloudformation wait stack-delete-complete  --stack-name $(NAME)
 
-demo: VPC_ID=$(shell aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs)
-demo: SUBNET_IDS=$(shell aws ec2 describe-subnets --output text \
-		--filters Name=vpc-id,Values=$(VPC_ID) Name=default-for-az,Values=true \
-		--query 'join(`,`,sort_by(Subnets[?MapPublicIpOnLaunch], &AvailabilityZone)[*].SubnetId)')
 demo: 
 	aws cloudformation validate-template --template-body file://./cloudformation/demo.yaml > /dev/null
 	echo "deploy demo in default VPC $(VPC_ID), subnets $(SUBNET_IDS)" ; \
@@ -99,6 +100,21 @@ demo:
 delete-demo:
 	aws cloudformation delete-stack --stack-name $(NAME)-demo
 	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)-demo
+
+demo-windows: 
+	aws cloudformation validate-template --template-body file://./cloudformation/demo-windows.yaml > /dev/null
+	echo "deploy demo in default VPC $(VPC_ID), subnets $(SUBNET_IDS)" ; \
+        ([[ -z $(VPC_ID) ]] || [[ -z $(SUBNET_IDS) ]] ) && \
+                echo "Either there is no default VPC in your account or there are no subnets in the default VPC" && exit 1 ; \
+	aws cloudformation deploy --stack-name $(NAME)-demo-windows \
+		--no-fail-on-empty-changeset \
+		--capabilities CAPABILITY_IAM \
+		--template ./cloudformation/demo-windows.yaml  \
+		--parameter-overrides VPC=$(VPC_ID) Subnets=$(SUBNET_IDS)
+
+delete-demo-windows:
+	aws cloudformation delete-stack --stack-name $(NAME)-demo-windows
+	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)-demo-windows
 
 stateful-demo: VPC_ID=$(shell aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs)
 stateful-demo: SUBNET_IDS=$(shell aws ec2 describe-subnets --output text \
@@ -118,4 +134,16 @@ stateful-demo:
 delete-stateful-demo:
 	aws cloudformation delete-stack --stack-name $(NAME)-stateful-demo
 	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)-stateful-demo
+
+deploy-pipeline: 
+	aws cloudformation deploy \
+                --capabilities CAPABILITY_IAM \
+                --stack-name $(NAME)-pipeline \
+                --template-file ./cloudformation/cicd-pipeline.yaml \
+                --parameter-overrides \
+                        S3BucketPrefix=$(S3_BUCKET_PREFIX)
+
+delete-pipeline: 
+	aws cloudformation delete-stack --stack-name $(NAME)-pipeline
+	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)-pipeline
 

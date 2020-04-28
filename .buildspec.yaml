@@ -3,11 +3,15 @@ env:
   variables:
     LAMBDA_BUCKET_PREFIX: binxio-public
     LAMBDA_BUCKET_REGION: eu-central-1
+    MAKE_TARGET: deploy
 phases:
   install:
     runtime-versions:
-        docker: 18
-        python: 3.7
+      docker: 18
+      python: 3.7
+    commands:
+      - pipenv update -d
+      - git checkout Pipfile.lock
   build:
     commands:
-      - make S3_BUCKET_PREFIX=${LAMBDA_BUCKET_PREFIX} AWS_REGION=${LAMBDA_BUCKET_REGION} deploy
+      - make S3_BUCKET_PREFIX=${LAMBDA_BUCKET_PREFIX} AWS_REGION=${LAMBDA_BUCKET_REGION} ${MAKE_TARGET}
