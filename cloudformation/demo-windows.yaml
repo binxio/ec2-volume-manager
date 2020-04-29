@@ -27,8 +27,6 @@ Resources:
             Tags:
               - Key: Name
                 Value: stateful-instance-1
-              - Key: ec2-volume-manager-attachment
-                Value: stateful-instance-1
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -98,6 +96,10 @@ Resources:
       MinSize: '0'
       MaxSize: '1'
       DesiredCapacity: '1'
+      Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1
+          PropagateAtLaunch: true
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MinInstancesInService: 0
