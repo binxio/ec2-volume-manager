@@ -27,6 +27,8 @@ Resources:
             Tags:
               - Key: Name
                 Value: stateful-instance-1
+              - Key: ec2-volume-manager-attachment
+                Value: stateful-instance-1
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -56,6 +58,8 @@ Resources:
       AvailabilityZone: !Sub '${AWS::Region}a'
       Size: 8
       Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1      
         - Key: device-name
           Value: xvdf
         - Key: Name
@@ -71,6 +75,8 @@ Resources:
       AvailabilityZone: !Sub '${AWS::Region}a'
       Size: 8
       Tags:
+        - Key: ec2-volume-manager-attachment
+          Value: stateful-instance-1      
         - Key: device-name
           Value: xvdg
         - Key: Name
