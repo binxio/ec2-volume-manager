@@ -106,6 +106,7 @@ Resources:
                    }
                 }
             </powershell>
+            <persist>true</persist>
         TagSpecifications:
           - ResourceType: instance
             Tags:
