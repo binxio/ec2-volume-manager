@@ -30,7 +30,7 @@ class EC2Instance(dict):
 
     @property
     def tags(self) -> dict:
-        return {t["Key"]: t["Value"] for t in self["Tags"]}
+        return {t["Key"]: t["Value"] for t in self.get("Tags", {})}
 
     def __key(self):
         return self["InstanceId"]
